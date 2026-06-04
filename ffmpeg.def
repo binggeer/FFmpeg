@@ -1,0 +1,36 @@
+; 易语言 .DLL声明 要求导出名为 FF_*（无 _ 前缀、无 @ 栈后缀）
+; 实现仍为 __stdcall，此处将公开名映射到 MSVC 修饰符号
+LIBRARY ffmpeg
+EXPORTS
+    FF_Init                         = _FF_Init@20
+    FF_Free                         = _FF_Free@4
+    FF_GetLastErrorGBK              = _FF_GetLastErrorGBK@0
+    FF_GetEncoderTypeGBK            = _FF_GetEncoderTypeGBK@4
+    FF_GetWidth                     = _FF_GetWidth@4
+    FF_GetHeight                    = _FF_GetHeight@4
+    FF_GetDecodedFrameWidth         = _FF_GetDecodedFrameWidth@4
+    FF_GetDecodedFrameHeight        = _FF_GetDecodedFrameHeight@4
+    FF_GetRenderFrameWidth          = _FF_GetRenderFrameWidth@4
+    FF_GetRenderFrameHeight         = _FF_GetRenderFrameHeight@4
+    FF_IsLandscape                  = _FF_IsLandscape@4
+    FF_GetRealtimeFps               = _FF_GetRealtimeFps@4
+    FF_GetEncodeBitrate             = _FF_GetEncodeBitrate@4
+    FF_GetLastEncodeBytes           = _FF_GetLastEncodeBytes@4
+    FF_GetRenderBGRASize            = _FF_GetRenderBGRASize@12
+    FF_EncodeFrame_BGRA             = _FF_EncodeFrame_BGRA@20
+    FF_EncodeFrame_D3D11            = _FF_EncodeFrame_D3D11@16
+    FF_ProcessFrame_D3D11           = _FF_ProcessFrame_D3D11@16
+    FF_DecodePacket_RenderBGRA      = _FF_DecodePacket_RenderBGRA@20
+    FF_RecordBeginEx                = _FF_RecordBeginEx@12
+    FF_RecordHasAudio               = _FF_RecordHasAudio@4
+    FF_RecordFrame_BGRA             = _FF_RecordFrame_BGRA@12
+    FF_RecordFrame_D3D11            = _FF_RecordFrame_D3D11@8
+    FF_RecordEnd                    = _FF_RecordEnd@4
+    FF_PlayOpenEx                   = _FF_PlayOpenEx@12
+    FF_PlayOpen                     = _FF_PlayOpen@8
+    FF_PlayReadBGRA                 = _FF_PlayReadBGRA@12
+    FF_PlayPause                     = _FF_PlayPause@4
+    FF_PlayResume                   = _FF_PlayResume@4
+    FF_PlaySetVolume                = _FF_PlaySetVolume@8
+    FF_PlaySeekMs                   = _FF_PlaySeekMs@8
+    FF_PlayClose                    = _FF_PlayClose@4

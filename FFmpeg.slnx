@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="FFmpeg.vcxproj" Id="72368042-0786-4504-8147-a6cab4151ced" />
+</Solution>

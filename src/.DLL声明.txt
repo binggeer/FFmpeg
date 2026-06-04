@@ -1,0 +1,123 @@
+﻿.DLL命令 FF_Init, 整数型, "ffmpeg.dll", "FF_Init", , 成功返回会话句柄，失败返回0。须在截屏编解码前调用；编码宽高会对齐为偶数
+    .参数 参_use_cpu, 整数型, , 0硬编自动兜底，1仅CPU软编
+    .参数 参_宽度, 整数型, , DX原始宽度
+    .参数 参_高度, 整数型, , DX原始高度
+    .参数 参_帧率, 整数型, , 编解码最高FPS，编解码循环内按此等待；录制MP4不按此节流
+    .参数 参_码率KB每秒, 整数型, , 目标码率，单位KB/s，与取估算码率同单位
+
+.DLL命令 FF_Free, , "ffmpeg.dll", "FF_Free", , 释放会话、编解码器及相关资源
+    .参数 参_句柄, 整数型, , 会话句柄
+
+.DLL命令 FF_GetLastErrorGBK, 文本型, "ffmpeg.dll", "FF_GetLastErrorGBK", , 返回GBK错误文本，失败后可显示
+
+.DLL命令 FF_GetEncoderTypeGBK, 文本型, "ffmpeg.dll", "FF_GetEncoderTypeGBK", , 硬编返回显卡型号，软编返回libx264及CPU信息
+    .参数 参_句柄, 整数型, , 会话句柄
+
+.DLL命令 FF_GetWidth, 整数型, "ffmpeg.dll", "FF_GetWidth", , 编码逻辑宽度，偶数对齐后
+    .参数 参_句柄, 整数型, , 会话句柄
+
+.DLL命令 FF_GetHeight, 整数型, "ffmpeg.dll", "FF_GetHeight", , 编码逻辑高度，偶数对齐后
+    .参数 参_句柄, 整数型, , 会话句柄
+
+.DLL命令 FF_GetDecodedFrameWidth, 整数型, "ffmpeg.dll", "FF_GetDecodedFrameWidth", , 上一帧H264解码实际宽，未解码则返回初始化宽
+    .参数 参_句柄, 整数型, , 会话句柄
+
+.DLL命令 FF_GetDecodedFrameHeight, 整数型, "ffmpeg.dll", "FF_GetDecodedFrameHeight", , 上一帧H264解码实际高
+    .参数 参_句柄, 整数型, , 会话句柄
+
+.DLL命令 FF_GetRenderFrameWidth, 整数型, "ffmpeg.dll", "FF_GetRenderFrameWidth", , 解码BGRA缓冲宽，DX.置渲染尺寸用
+    .参数 参_句柄, 整数型, , 会话句柄
+
+.DLL命令 FF_GetRenderFrameHeight, 整数型, "ffmpeg.dll", "FF_GetRenderFrameHeight", , 解码BGRA缓冲高
+    .参数 参_句柄, 整数型, , 会话句柄
+
+.DLL命令 FF_IsLandscape, 整数型, "ffmpeg.dll", "FF_IsLandscape", , 1横屏0竖屏；解码成功后根据画面内容判断(scrcpy同尺寸黑边)
+    .参数 参_句柄, 整数型, , 会话句柄
+
+.DLL命令 FF_GetRealtimeFps, 整数型, "ffmpeg.dll", "FF_GetRealtimeFps", , 实测帧率，编码或解码成功时刷新，可反复读取
+    .参数 参_句柄, 整数型, , 会话句柄
+
+.DLL命令 FF_GetEncodeBitrate, 整数型, "ffmpeg.dll", "FF_GetEncodeBitrate", , 实测平均码率，单位KB/s
+    .参数 参_句柄, 整数型, , 会话句柄
+
+.DLL命令 FF_GetLastEncodeBytes, 整数型, "ffmpeg.dll", "FF_GetLastEncodeBytes", , 最近一次编码成功写出的H264字节数
+    .参数 参_句柄, 整数型, , 会话句柄
+
+.DLL命令 FF_GetRenderBGRASize, 整数型, "ffmpeg.dll", "FF_GetRenderBGRASize", , 返回0成功；同时写出渲染缓冲与H264建议缓冲字节数
+    .参数 参_句柄, 整数型, , 会话句柄
+    .参数 参_渲染尺寸, 整数型, 传址, 输出：解码渲染BGRA字节数，约宽×4×原始高
+    .参数 参_H264尺寸, 整数型, 传址, 输出：建议H264缓冲字节数，约编宽×编高×2
+
+.DLL命令 FF_EncodeFrame_BGRA, 整数型, "ffmpeg.dll", "FF_EncodeFrame_BGRA", , 仅编码BGRA为H264。返回0成功，1本帧暂无包，<0失败
+    .参数 参_句柄, 整数型, , 会话句柄
+    .参数 参_BGRA帧, 字节集, 传址, 截屏BGRA数据，传址
+    .参数 参_截屏字节长度, 整数型, , DX.截屏到字节集返回的实际字节长度
+    .参数 参_H264输出, 字节集, 传址, H264输出缓冲，传址
+    .参数 参_输出最大长度, 整数型, 传址, 传入缓冲容量，返回实际写出H264长度
+
+.DLL命令 FF_EncodeFrame_D3D11, 整数型, "ffmpeg.dll", "FF_EncodeFrame_D3D11", , 仅编码D3D纹理为H264。返回0成功，1暂无包，<0失败，不可直接渲染
+    .参数 参_句柄, 整数型, , 会话句柄
+    .参数 参_D3D纹理指针, 整数型, , DX.截屏到纹理()返回的指针
+    .参数 参_H264输出, 字节集, 传址, H264输出缓冲，传址
+    .参数 参_输出最大长度, 整数型, 传址, 传入缓冲容量，返回实际写出H264长度
+
+.DLL命令 FF_ProcessFrame_D3D11, 整数型, "ffmpeg.dll", "FF_ProcessFrame_D3D11", , D3D纹理编码并解码为BGRA。返回0成功，1继续循环，<0失败
+    .参数 参_句柄, 整数型, , 会话句柄
+    .参数 参_D3D纹理指针, 整数型, , DX.截屏到纹理()返回的指针
+    .参数 参_渲染缓冲, 字节集, 传址, 解码后BGRA输出，传址，容量须≥渲染尺寸
+    .参数 参_渲染缓冲容量, 整数型, , 渲染缓冲字节容量，可用取字节集长度
+
+.DLL命令 FF_DecodePacket_RenderBGRA, 整数型, "ffmpeg.dll", "FF_DecodePacket_RenderBGRA", , H264解码为渲染BGRA。返回0已解出一帧，1需更多数据，<0失败
+    .参数 参_句柄, 整数型, , 会话句柄
+    .参数 参_H264数据, 字节集, 传址, H264输入数据，传址
+    .参数 参_H264长度, 整数型, , 实际H264字节数；传0时DLL用上次编码长度
+    .参数 参_渲染缓冲, 字节集, 传址, 解码后BGRA输出，传址
+    .参数 参_渲染缓冲容量, 整数型, , 渲染缓冲字节容量
+
+.DLL命令 FF_RecordBeginEx, 整数型, "ffmpeg.dll", "FF_RecordBeginEx", , 开始录制MP4；第三参0仅视频，非0录系统环回音频
+    .参数 参_句柄, 整数型, , 会话句柄
+    .参数 参_文件路径, 文本型, , MP4保存路径，GBK/ANSI
+    .参数 参_是否录制音频, 整数型, , 0仅视频 非0录系统环回音频
+
+.DLL命令 FF_RecordFrame_BGRA, , "ffmpeg.dll", "FF_RecordFrame_BGRA", , 写入一帧BGRA；若已开音频则同帧写入对应时长声音
+    .参数 参_句柄, 整数型, , 会话句柄
+    .参数 参_BGRA帧, 字节集, 传址, 截屏BGRA数据，传址
+    .参数 参_截屏字节长度, 整数型, , DX.截屏到字节集返回的实际字节长度
+
+.DLL命令 FF_RecordFrame_D3D11, , "ffmpeg.dll", "FF_RecordFrame_D3D11", , 写入一帧D3D纹理；若已开音频则同帧写入对应时长声音
+    .参数 参_句柄, 整数型, , 会话句柄
+    .参数 参_D3D纹理指针, 整数型, , DX.截屏到纹理()返回的指针
+
+.DLL命令 FF_RecordEnd, , "ffmpeg.dll", "FF_RecordEnd", , 结束录制并关闭MP4文件
+    .参数 参_句柄, 整数型, , 会话句柄
+
+.DLL命令 FF_PlayOpenEx, 整数型, "ffmpeg.dll", "FF_PlayOpenEx", , 打开本地视频；第三参0仅画面，非0扬声器出声
+    .参数 参_句柄, 整数型, , 会话句柄
+    .参数 参_文件路径, 文本型, , 视频文件路径，GBK/ANSI
+    .参数 参_是否播放音频, 整数型, , 0仅视频，非0播放文件音轨到默认扬声器
+
+.DLL命令 FF_PlayOpen, 整数型, "ffmpeg.dll", "FF_PlayOpen", , 打开本地视频（等同第三参非0的PlayOpenEx）
+    .参数 参_句柄, 整数型, , 会话句柄
+    .参数 参_文件路径, 文本型, , 视频文件路径，GBK/ANSI
+
+.DLL命令 FF_PlayReadBGRA, 整数型, "ffmpeg.dll", "FF_PlayReadBGRA", , 读取一帧BGRA。0有帧，1结束，2暂停中，<0失败
+    .参数 参_句柄, 整数型, , 会话句柄
+    .参数 参_BGRA输出, 字节集, 传址, BGRA输出缓冲，传址
+    .参数 参_输出最大长度, 整数型, 传址, 传入缓冲容量，返回本帧实际写出长度
+
+.DLL命令 FF_PlayPause, , "ffmpeg.dll", "FF_PlayPause", , 暂停播放
+    .参数 参_句柄, 整数型, , 会话句柄
+
+.DLL命令 FF_PlayResume, , "ffmpeg.dll", "FF_PlayResume", , 继续播放
+    .参数 参_句柄, 整数型, , 会话句柄
+
+.DLL命令 FF_PlaySetVolume, 整数型, "ffmpeg.dll", "FF_PlaySetVolume", , 设置播放音量0-100，返回0成功
+    .参数 参_句柄, 整数型, , 会话句柄
+    .参数 参_音量, 整数型, , 0静音到100最大
+
+.DLL命令 FF_PlaySeekMs, 整数型, "ffmpeg.dll", "FF_PlaySeekMs", , 相对跳转播放位置，返回0成功
+    .参数 参_句柄, 整数型, , 会话句柄
+    .参数 参_毫秒, 整数型, , 相对偏移毫秒，大于0快进，小于0快退
+
+.DLL命令 FF_PlayClose, , "ffmpeg.dll", "FF_PlayClose", , 关闭播放并释放播放相关资源
+    .参数 参_句柄, 整数型, , 会话句柄

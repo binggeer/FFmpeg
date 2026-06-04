@@ -1,0 +1,101 @@
+# =============================================================================
+# ffmpeg.dll — Win32 H.264 编解码 DLL（易语言 / C 调用）
+# =============================================================================
+
+# --- FFmpeg 预编译 SDK（体积大，勿提交；见 README 下载说明）---
+ffmpeg-n6.0-latest-win32-gpl-shared-6.0/
+
+# --- Visual Studio / MSBuild ---
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.VC.db
+*.VC.VC.opendb
+*.ipch
+*.aps
+*.ncb
+*.opendb
+*.opensdf
+*.sdf
+*.cache
+
+# 编译中间目录与产物（根目录 Release、工程同名子目录 FFmpeg/ 等）
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+[Rr]elease_*/
+[Ff]mpeg/
+x64/
+Win32/
+ipch/
+
+*.obj
+*.pch
+*.pdb
+*.idb
+*.ipdb
+*.iobj
+*.tlog
+*.log
+*.recipe
+*.lastbuildstate
+*.Build.CppClean.log
+*.FileListAbsolute.txt
+*.unsuccessfulbuild
+
+# 链接/打包输出（本地构建生成）
+*.dll
+*.exe
+*.exp
+*.lib
+*.pdb
+*.e
+
+# --- 测试与临时媒体 ---
+*.mp4
+*.avi
+*.mkv
+*.flv
+*.ts
+*.h264
+*.raw
+
+# --- 日志与调试 ---
+*.log
+logs/
+
+# --- IDE / 编辑器（非工程必需）---
+.idea/
+.vscode/
+*.code-workspace
+.cursor/
+
+# --- Agent / 本地规范（不参与编译，可按需自行保留）---
+AGENTS.md
+易语言语法规范说明.md
+
+# --- 环境与密钥 ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.json
+credentials.json
+
+# --- 系统文件 ---
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+*~
+*.swp
+
+# --- 其他语言生态（本仓库未使用，保留通用项以防误加）---
+__pycache__/
+node_modules/
+target/
+vendor/
