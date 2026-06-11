@@ -4,7 +4,6 @@
 #include "ff_util.h"
 
 #include <d3d11.h>
-#include <dxgi.h>
 
 #include <algorithm>
 #include <climits>
@@ -14,7 +13,35 @@
 #include <unordered_map>
 
 #pragma comment(lib, "d3d11.lib")
-#pragma comment(lib, "dxgi.lib")
+
+bool FfSafeAvcodecOpen2(AVCodecContext* ctx, const AVCodec* codec, int* out_ret)
+{
+    if (!ctx || !codec || !out_ret) {
+        return false;
+    }
+
+    *out_ret = AVERROR_UNKNOWN;
+    __try {
+        *out_ret = avcodec_open2(ctx, codec, nullptr);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        *out_ret = AVERROR_EXTERNAL;
+        return false;
+    }
+    return true;
+}
+
+void FfSafeAvcodecFreeContext(AVCodecContext** ctx)
+{
+    if (!ctx || !*ctx) {
+        return;
+    }
+
+    __try {
+        avcodec_free_context(ctx);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        *ctx = nullptr;
+    }
+}
 
 namespace {
 
@@ -25,76 +52,24 @@ void SetAvError(const char* prefix, int err)
     ff::SetLastError(std::string(prefix) + buf);
 }
 
-std::string WideToUtf8(const wchar_t* wide)
+constexpr int64_t kMaxInitDimension = 8192;
+constexpr int64_t kMaxInitBufferBytes = 256LL * 1024 * 1024;
+
+bool ValidateInitBufferSizes(int width, int height, int enc_width, int enc_height)
 {
-    if (!wide || !wide[0]) {
-        return {};
+    if (width <= 0 || height <= 0 || enc_width <= 0 || enc_height <= 0) {
+        return false;
     }
-    const int len = WideCharToMultiByte(CP_UTF8, 0, wide, -1, nullptr, 0, nullptr, nullptr);
-    if (len <= 1) {
-        return {};
-    }
-    std::string out(static_cast<size_t>(len - 1), '\0');
-    WideCharToMultiByte(CP_UTF8, 0, wide, -1, out.data(), len, nullptr, nullptr);
-    return out;
-}
-
-std::string FindAdapterNameUtf8(UINT vendor_id)
-{
-    IDXGIFactory1* factory = nullptr;
-    if (FAILED(CreateDXGIFactory1(__uuidof(IDXGIFactory1), reinterpret_cast<void**>(&factory))) || !factory) {
-        return {};
+    if (width > kMaxInitDimension || height > kMaxInitDimension) {
+        return false;
     }
 
-    std::string best_name;
-    UINT64 best_vram = 0;
-
-    for (UINT i = 0;; ++i) {
-        IDXGIAdapter1* adapter = nullptr;
-        if (factory->EnumAdapters1(i, &adapter) == DXGI_ERROR_NOT_FOUND) {
-            break;
-        }
-        if (!adapter) {
-            continue;
-        }
-
-        DXGI_ADAPTER_DESC1 desc = {};
-        if (SUCCEEDED(adapter->GetDesc1(&desc))
-            && (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) == 0
-            && (vendor_id == 0 || desc.VendorId == vendor_id)) {
-            const std::string name = WideToUtf8(desc.Description);
-            if (vendor_id != 0) {
-                adapter->Release();
-                factory->Release();
-                return name;
-            }
-            if (!name.empty() && desc.DedicatedVideoMemory >= best_vram) {
-                best_vram = desc.DedicatedVideoMemory;
-                best_name = name;
-            }
-        }
-        adapter->Release();
-    }
-
-    factory->Release();
-    return best_name;
-}
-
-std::string GetGpuNameForEncoder(const char* codec_name)
-{
-    if (!codec_name) {
-        return {};
-    }
-    if (strcmp(codec_name, "h264_nvenc") == 0) {
-        return FindAdapterNameUtf8(0x10DE);
-    }
-    if (strcmp(codec_name, "h264_amf") == 0) {
-        return FindAdapterNameUtf8(0x1002);
-    }
-    if (strcmp(codec_name, "h264_qsv") == 0) {
-        return FindAdapterNameUtf8(0x8086);
-    }
-    return FindAdapterNameUtf8(0);
+    const int64_t render_size = static_cast<int64_t>(width) * 4 * height;
+    const int64_t h264_size = static_cast<int64_t>(enc_width) * enc_height * 2;
+    return render_size > 0
+        && h264_size > 0
+        && render_size <= kMaxInitBufferBytes
+        && h264_size <= kMaxInitBufferBytes;
 }
 
 std::string BuildEncoderDescription(const AVCodec* codec)
@@ -103,11 +78,8 @@ std::string BuildEncoderDescription(const AVCodec* codec)
         return ff::Utf8ToGbk("CPU");
     }
 
-    const std::string gpu = GetGpuNameForEncoder(codec->name);
-    if (gpu.empty()) {
-        return ff::Utf8ToGbk("GPU");
-    }
-    return ff::Utf8ToGbk("GPU(" + gpu + ")");
+    // Avoid DXGI adapter enumeration during init; it can AV-crash on some drivers.
+    return ff::Utf8ToGbk(std::string("GPU(") + codec->name + ")");
 }
 
 bool InitScaler(
@@ -314,6 +286,11 @@ bool ConfigureEncoderContext(
         ctx->gop_size = std::min(ctx->gop_size, 120);
     }
 
+    if (!ctx->priv_data) {
+        ff::SetLastError(std::string(codec->name) + " encoder priv_data is null");
+        return false;
+    }
+
     if (strcmp(codec->name, "libx264") == 0) {
         ctx->pix_fmt = AV_PIX_FMT_YUV420P;
         av_opt_set(ctx->priv_data, "preset", "ultrafast", 0);
@@ -360,7 +337,11 @@ bool ConfigureEncoderContext(
     const int eff_rc_fps = rc_fps > 0 ? rc_fps : (fps > 0 ? fps : 30);
     ApplyTargetBitrate(ctx, codec, bitrate_bps, bitrate_kb, eff_rc_fps);
 
-    const int ret = avcodec_open2(ctx, codec, nullptr);
+    int ret = AVERROR_UNKNOWN;
+    if (!FfSafeAvcodecOpen2(ctx, codec, &ret)) {
+        ff::SetLastError(std::string(codec->name) + " avcodec_open2: hardware encoder crashed");
+        return false;
+    }
     if (ret < 0) {
         const std::string prefix = std::string(codec->name) + " avcodec_open2: ";
         SetAvError(prefix.c_str(), ret);
@@ -428,7 +409,7 @@ bool TryOpenEncoder(
             bitrate_bps,
             session.bitrate_kb,
             session.rc_fps)) {
-        avcodec_free_context(&ctx);
+        FfSafeAvcodecFreeContext(&ctx);
         return false;
     }
 
@@ -984,22 +965,29 @@ FfSessionManager& FfSessionManager::Instance()
 
 int FfSessionManager::Create(std::unique_ptr<FfSession> session)
 {
-    std::lock_guard<std::mutex> lock(map_mutex_);
+    FfCsLock lock(map_mutex_);
     const int handle = next_handle_.fetch_add(1);
     sessions_[handle] = std::move(session);
     return handle;
 }
 
-FfSession* FfSessionManager::Get(int handle)
+FfSessionManager::SessionGuard FfSessionManager::Acquire(int handle)
 {
-    std::lock_guard<std::mutex> lock(map_mutex_);
+    auto map_lock = std::make_unique<FfCsLock>(map_mutex_);
     const auto it = sessions_.find(handle);
-    return it == sessions_.end() ? nullptr : it->second.get();
+    if (it == sessions_.end()) {
+        ff::SetLastError("invalid session handle");
+        return SessionGuard(nullptr, nullptr, nullptr);
+    }
+
+    FfSession* session = it->second.get();
+    auto session_lock = std::make_unique<FfCsLock>(session->mutex);
+    return SessionGuard(std::move(map_lock), std::move(session_lock), session);
 }
 
 std::unique_ptr<FfSession> FfSessionManager::Remove(int handle)
 {
-    std::lock_guard<std::mutex> lock(map_mutex_);
+    FfCsLock lock(map_mutex_);
     const auto it = sessions_.find(handle);
     if (it == sessions_.end()) {
         return nullptr;
@@ -1209,11 +1197,16 @@ bool FfSessionInit(FfSession& session, int use_cpu, int width, int height, int f
     }
     session.enc_width = ff::AlignEven(width / session.enc_scale_denom);
     session.enc_height = ff::AlignEven(height / session.enc_scale_denom);
+    if (!ValidateInitBufferSizes(
+            session.src_width,
+            session.src_height,
+            session.enc_width,
+            session.enc_height)) {
+        ff::SetLastError("invalid width/height or buffer size overflow");
+        return false;
+    }
+
     session.use_cpu_only = (use_cpu != 0);
-    session.render_bgra_size = session.src_width * 4 * session.src_height;
-    session.h264_buffer_size = session.enc_width * session.enc_height * 2;
-    session.scratch_bgra.resize(static_cast<size_t>(session.render_bgra_size));
-    session.scratch_h264.resize(static_cast<size_t>(session.h264_buffer_size));
 
     // N卡 -> A卡 -> Intel核显 -> Windows MF -> CPU(libx264)
     static const char* kHwEncoders[] = {"h264_nvenc", "h264_amf", "h264_qsv", "h264_mf"};
@@ -1248,6 +1241,11 @@ bool FfSessionInit(FfSession& session, int use_cpu, int width, int height, int f
             return false;
         }
     }
+
+    session.render_bgra_size = session.src_width * 4 * session.src_height;
+    session.h264_buffer_size = session.enc_width * session.enc_height * 2;
+    session.scratch_bgra.resize(static_cast<size_t>(session.render_bgra_size));
+    session.scratch_h264.resize(static_cast<size_t>(session.h264_buffer_size));
 
     session.enc_pkt = av_packet_alloc();
     if (!session.enc_pkt) {

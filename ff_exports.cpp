@@ -6,22 +6,13 @@
 
 namespace {
 
-FfSession* LockSession(int handle)
-{
-    FfSession* session = FfSessionManager::Instance().Get(handle);
-    if (!session) {
-        ff::SetLastError("invalid session handle");
-    }
-    return session;
-}
-
 struct SessionLock {
+    FfSessionManager::SessionGuard guard_;
     FfSession* session = nullptr;
-    std::unique_lock<std::mutex> lock;
 
     explicit SessionLock(int handle)
-        : session(LockSession(handle))
-        , lock(session ? std::unique_lock<std::mutex>{session->mutex} : std::unique_lock<std::mutex>{})
+        : guard_(FfSessionManager::Instance().Acquire(handle))
+        , session(guard_.session)
     {
     }
 
@@ -37,6 +28,7 @@ int FF_STDCALL FF_Init(int use_cpu, int width, int height, int fps, int bitrate_
 {
     auto session = std::make_unique<FfSession>();
     if (!FfSessionInit(*session, use_cpu, width, height, fps, bitrate_kb)) {
+        FfSessionDestroy(*session);
         return 0;
     }
     return FfSessionManager::Instance().Create(std::move(session));
@@ -49,7 +41,7 @@ void FF_STDCALL FF_Free(int handle)
     }
     auto session = FfSessionManager::Instance().Remove(handle);
     if (session) {
-        std::lock_guard<std::mutex> lock(session->mutex);
+        FfCsLock lock(session->mutex);
         FfSessionDestroy(*session);
     }
     ff::ClearLastError();

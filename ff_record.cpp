@@ -163,7 +163,11 @@ bool OpenRecordAudioEncoder(
         ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
     }
 
-    const int ret = avcodec_open2(ctx, codec, nullptr);
+    int ret = AVERROR_UNKNOWN;
+    if (!FfSafeAvcodecOpen2(ctx, codec, &ret)) {
+        ff::SetLastError("record audio avcodec_open2 crashed");
+        return false;
+    }
     if (ret < 0) {
         SetAvError("record audio avcodec_open2: ", ret);
         return false;
@@ -597,15 +601,22 @@ bool BeginRecordMp4(FfSession& session, const char* path_gbk, int sample_rate, i
     rec.enc->max_b_frames = 0;
     rec.enc->pix_fmt = AV_PIX_FMT_YUV420P;
     rec.enc->bit_rate = ff::BitrateFromKbPerSec(session.bitrate_kb);
-    av_opt_set(rec.enc->priv_data, "preset", "ultrafast", 0);
-    av_opt_set(rec.enc->priv_data, "tune", "zerolatency", 0);
+    if (rec.enc->priv_data) {
+        av_opt_set(rec.enc->priv_data, "preset", "ultrafast", 0);
+        av_opt_set(rec.enc->priv_data, "tune", "zerolatency", 0);
+    }
 
     if (rec.fmt->oformat->flags & AVFMT_GLOBALHEADER) {
         rec.enc->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
     }
 
-    if (avcodec_open2(rec.enc, vcodec, nullptr) < 0) {
-        ff::SetLastError("record avcodec_open2 failed");
+    int open_ret = AVERROR_UNKNOWN;
+    if (!FfSafeAvcodecOpen2(rec.enc, vcodec, &open_ret) || open_ret < 0) {
+        if (open_ret < 0) {
+            SetAvError("record avcodec_open2: ", open_ret);
+        } else {
+            ff::SetLastError("record avcodec_open2 crashed");
+        }
         ReleaseRecordState(rec);
         return false;
     }

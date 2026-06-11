@@ -11,7 +11,6 @@
 
 #include <atomic>
 #include <algorithm>
-#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -34,7 +33,7 @@ struct WasapiLoopback {
     int capture_bits = 16;
     float volume_compensation_gain = 1.0f;
     std::vector<uint8_t> capture_queue;
-    std::mutex queue_mutex;
+    FfCriticalSection queue_cs;
     std::thread capture_thread;
     std::atomic<bool> capture_stop{false};
 };
@@ -67,7 +66,7 @@ void WasapiCaptureThreadProc(WasapiLoopback* state)
 {
     while (!state->capture_stop.load(std::memory_order_acquire)) {
         {
-            std::lock_guard<std::mutex> lock(state->queue_mutex);
+            FfCsLock lock(state->queue_cs);
             DrainWasapiPackets(state, false);
         }
         Sleep(5);
@@ -462,7 +461,7 @@ void FfRecordWasapiFlushRemaining(FfSession& session)
     }
 
     {
-        std::lock_guard<std::mutex> lock(state->queue_mutex);
+        FfCsLock lock(state->queue_cs);
         DrainWasapiPackets(state, true);
 
         if (!state->capture_queue.empty()) {
@@ -491,17 +490,17 @@ bool FfRecordWasapiCaptureForVideoFrame(FfSession& session)
     const int target_bytes = state->bytes_per_video_frame;
 
     {
-        std::unique_lock<std::mutex> lock(state->queue_mutex);
+        FfCsLock lock(state->queue_cs);
         if (!DrainWasapiPackets(state, true)) {
             return false;
         }
 
         int wait_ms = 0;
         while (static_cast<int>(state->capture_queue.size()) < target_bytes && wait_ms < 80) {
-            lock.unlock();
+            lock.release();
             Sleep(1);
             ++wait_ms;
-            lock.lock();
+            lock.acquire(state->queue_cs);
             DrainWasapiPackets(state, false);
         }
 

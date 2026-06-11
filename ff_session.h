@@ -13,13 +13,88 @@ extern "C" {
 #include <chrono>
 #include <cstdint>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+
+class FfCriticalSection {
+public:
+    FfCriticalSection()
+    {
+        InitializeCriticalSection(&cs_);
+    }
+
+    ~FfCriticalSection()
+    {
+        DeleteCriticalSection(&cs_);
+    }
+
+    FfCriticalSection(const FfCriticalSection&) = delete;
+    FfCriticalSection& operator=(const FfCriticalSection&) = delete;
+
+    void lock()
+    {
+        EnterCriticalSection(&cs_);
+    }
+
+    void unlock()
+    {
+        LeaveCriticalSection(&cs_);
+    }
+
+private:
+    CRITICAL_SECTION cs_{};
+};
+
+class FfCsLock {
+public:
+    explicit FfCsLock(FfCriticalSection& cs)
+        : cs_(&cs)
+    {
+        cs_->lock();
+    }
+
+    ~FfCsLock()
+    {
+        if (cs_) {
+            cs_->unlock();
+        }
+    }
+
+    FfCsLock(FfCsLock&& other) noexcept
+        : cs_(other.cs_)
+    {
+        other.cs_ = nullptr;
+    }
+
+    FfCsLock(const FfCsLock&) = delete;
+    FfCsLock& operator=(const FfCsLock&) = delete;
+
+    void release()
+    {
+        if (cs_) {
+            cs_->unlock();
+            cs_ = nullptr;
+        }
+    }
+
+    void acquire(FfCriticalSection& cs)
+    {
+        cs_ = &cs;
+        cs_->lock();
+    }
+
+private:
+    FfCriticalSection* cs_;
+};
+
 struct FfSession {
-    std::mutex mutex;
+    FfCriticalSection mutex;
 
     int src_width = 0;
     int src_height = 0;
@@ -161,17 +236,45 @@ struct FfSession {
 
 class FfSessionManager {
 public:
+    class SessionGuard {
+    public:
+        FfSession* session = nullptr;
+
+        explicit operator bool() const
+        {
+            return session != nullptr;
+        }
+
+    private:
+        friend class FfSessionManager;
+        std::unique_ptr<FfCsLock> map_lock_;
+        std::unique_ptr<FfCsLock> session_lock_;
+
+        SessionGuard(
+            std::unique_ptr<FfCsLock> map_lock,
+            std::unique_ptr<FfCsLock> session_lock,
+            FfSession* session_ptr)
+            : session(session_ptr)
+            , map_lock_(std::move(map_lock))
+            , session_lock_(std::move(session_lock))
+        {
+        }
+    };
+
     static FfSessionManager& Instance();
 
     int Create(std::unique_ptr<FfSession> session);
-    FfSession* Get(int handle);
+    SessionGuard Acquire(int handle);
     std::unique_ptr<FfSession> Remove(int handle);
 
 private:
-    std::mutex map_mutex_;
+    FfCriticalSection map_mutex_;
     std::unordered_map<int, std::unique_ptr<FfSession>> sessions_;
     std::atomic<int> next_handle_{1};
 };
+
+bool FfSafeAvcodecOpen2(AVCodecContext* ctx, const AVCodec* codec, int* out_ret);
+void FfSafeAvcodecFreeContext(AVCodecContext** ctx);
 
 bool FfSessionInit(FfSession& session, int use_cpu, int width, int height, int fps, int bitrate_kb);
 void FfSessionDestroy(FfSession& session);
